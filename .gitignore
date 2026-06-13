@@ -1,0 +1,26 @@
+# Virtual Environment
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE
+.vscode/
+.idea/
+
+# Outputs
+outputs/
+*.png
+
+# Large Data
+data/
+*.tif
+*.tiff
+*.geojson
+
+# OS
+.DS_Store
+Thumbs.db
