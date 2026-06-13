@@ -160,11 +160,24 @@ if __name__ == "__main__":
                     else "flagged"
                 )
 
-                geometry = (
-                    result["shifted_geom"]
-                    if status == "corrected"
-                    else original_geom
-                )
+                if status == "corrected":
+                
+                    geometry = (
+                        gpd.GeoSeries(
+                            [result["shifted_geom"]],
+                            crs=src.crs
+                        )
+                        .to_crs("EPSG:4326")
+                        .iloc[0]
+                    )
+
+                else:
+                    geometry = original_geom
+
+                if idx < 20:
+                    print(
+                        f"{plot_id}-{geometry.bounds}    "
+                    )
 
                 predictions.append({
 

@@ -61,9 +61,9 @@ def compute_confidence(
     )
 
     confidence = (
-        0.40 * shift_score +
-        0.20 * area_score +
-        0.40 * gap_score
+        0.75 * shift_score +
+        0.15 * area_score +
+        0.10 * gap_score
     )
 
     return round(

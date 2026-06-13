@@ -158,7 +158,7 @@ if __name__ == "__main__":
 
                 status = (
                     "corrected"
-                    if confidence >= 0.55
+                    if confidence >= 0.70
                     else "flagged"
                 )
 
