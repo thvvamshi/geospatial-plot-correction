@@ -22,7 +22,7 @@ from confidence import (
 
 VILLAGE_DIR = "data/vadnerbhairav"
 # if None === aLL plots will be evaluated
-SAMPLE_SIZE = 500
+SAMPLE_SIZE = None
 
 
 # ============================================================
