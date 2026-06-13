@@ -21,6 +21,7 @@ from confidence import (
 )
 
 VILLAGE_DIR = "data/vadnerbhairav"
+# if None === aLL plots will be evaluated
 SAMPLE_SIZE = 500
 
 
@@ -77,10 +78,13 @@ if __name__ == "__main__":
     with rasterio.open(
         village.boundaries_path
     ) as src:
+        
+        if SAMPLE_SIZE is None:
+            plot_iter = plots.iterrows()
+        else:
+            plot_iter = plots.head(SAMPLE_SIZE).iterrows()
 
-        for idx, (plot_id, row) in enumerate(
-            plots.head(SAMPLE_SIZE).iterrows()
-        ):
+        for idx, (plot_id, row) in enumerate(plot_iter):
 
             try:
 
