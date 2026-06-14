@@ -32,10 +32,7 @@ village = load(
     f"data/{village_name}"
 )
 
-# ============================================================
 # IoU
-# ============================================================
-
 def iou(poly1, poly2):
 
     inter = poly1.intersection(
@@ -52,10 +49,7 @@ def iou(poly1, poly2):
     return inter / union
 
 
-# ============================================================
 # Main
-# ============================================================
-
 if __name__ == "__main__":
 
     truth = village.example_truths
@@ -87,10 +81,7 @@ if __name__ == "__main__":
                     official_geom
                 )
 
-                # ----------------------------------
                 # Alignment
-                # ----------------------------------
-
                 result = align_plot(
                     boundary_img,
                     geom_img,
@@ -112,20 +103,14 @@ if __name__ == "__main__":
                     "shifted_geom"
                 ]
 
-                # ----------------------------------
                 # Confidence
-                # ----------------------------------
-
                 confidence = compute_confidence(
                     shift_distance=shift_distance,
                     area_ratio=1.0,
                     confidence_gap=result["confidence_gap"]
                 )
 
-                # ----------------------------------
                 # Convert back to EPSG:4326
-                # ----------------------------------
-
                 shifted_geom = shp_transform(
                     lambda xs, ys, z=None:
                     tf.transform(xs, ys),
@@ -183,10 +168,7 @@ if __name__ == "__main__":
                     f"FAILED {plot_id}: {e}"
                 )
 
-    # ========================================================
     # Save Results
-    # ========================================================
-
     df = pd.DataFrame(
         rows
     )
