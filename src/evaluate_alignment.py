@@ -22,8 +22,15 @@ from bhume.geo import _to_lonlat_crs
 
 from shapely.ops import transform as shp_transform
 
-VILLAGE_DIR = "data/vadnerbhairav"
+village_name = (
+    sys.argv[1]
+    if len(sys.argv) > 1
+    else "vadnerbhairav"
+)
 
+village = load(
+    f"data/{village_name}"
+)
 
 # ============================================================
 # IoU
@@ -50,10 +57,6 @@ def iou(poly1, poly2):
 # ============================================================
 
 if __name__ == "__main__":
-
-    village = load(
-        VILLAGE_DIR
-    )
 
     truth = village.example_truths
 
@@ -156,6 +159,9 @@ if __name__ == "__main__":
                     "alignment_score":
                     best_score,
 
+                    "confidence_gap": result[
+                    "confidence_gap"],
+
                     "confidence":
                     confidence,
 
@@ -196,7 +202,7 @@ if __name__ == "__main__":
 
     out_file = (
         OUTPUT_DIR /
-        "alignment_validation.csv"
+        f"alignment_evaluation_{village_name}.csv"
     )
 
     df.to_csv(

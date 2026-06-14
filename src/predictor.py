@@ -20,6 +20,8 @@ from confidence import (
     compute_confidence
 )
 
+# VILLAGE_DIR = "data/malatavadi"
+
 VILLAGE_DIR = "data/vadnerbhairav"
 # if None === aLL plots will be evaluated
 SAMPLE_SIZE = None
@@ -30,14 +32,13 @@ SAMPLE_SIZE = None
 # ============================================================
 
 def classify_area(area_ratio):
-
     if pd.isna(area_ratio):
         return "unknown"
 
     if 0.8 <= area_ratio <= 1.2:
         return "placement"
 
-    if area_ratio < 0.5 or area_ratio > 2.0:
+    if area_ratio < 0.4 or area_ratio > 2.5:
         return "area_error"
 
     return "uncertain"
@@ -102,11 +103,7 @@ if __name__ == "__main__":
                 # Conservative Flagging
                 # ------------------------------------
 
-                if area_class in [
-                    "area_error",
-                    "uncertain",
-                    "unknown"
-                ]:
+                if area_class == "area_error":
 
                     predictions.append({
 
@@ -148,8 +145,10 @@ if __name__ == "__main__":
                     shift_distance=result[
                         "shift_distance"
                     ],
-                    area_ratio=float(
-                        area_ratio
+                    area_ratio=(    
+                        None
+                        if pd.isna(area_ratio)
+                        else float(area_ratio)
                     ),
                     confidence_gap=result[
                         "confidence_gap"
@@ -158,7 +157,7 @@ if __name__ == "__main__":
 
                 status = (
                     "corrected"
-                    if confidence >= 0.70
+                    if confidence >= 0.65
                     else "flagged"
                 )
 

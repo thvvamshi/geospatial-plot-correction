@@ -19,14 +19,25 @@ from confidence import (
     compute_confidence
 )
 
-VILLAGE_DIR = "data/vadnerbhairav"
-VILLAGE_NAME = "vadnerbhairav"
+import argparse
 
+parser = argparse.ArgumentParser()
 
-# ============================================================
+parser.add_argument(
+    "--village",
+    required=True,
+    choices=[
+        "vadnerbhairav",
+        "malatavadi"
+    ]
+)
+
+args = parser.parse_args()
+
+VILLAGE_NAME = args.village
+VILLAGE_DIR = f"data/{VILLAGE_NAME}"
+
 # Area Classification
-# ============================================================
-
 def classify_area(area_ratio):
 
     if pd.isna(area_ratio):
@@ -35,16 +46,13 @@ def classify_area(area_ratio):
     if 0.8 <= area_ratio <= 1.2:
         return "placement"
 
-    if area_ratio < 0.5 or area_ratio > 2.0:
+    if area_ratio < 0.4 or area_ratio > 2.5:
         return "area_error"
 
     return "uncertain"
 
 
-# ============================================================
 # Main
-# ============================================================
-
 if __name__ == "__main__":
 
     village = load(VILLAGE_DIR)
@@ -72,10 +80,9 @@ if __name__ == "__main__":
 
     predictions = []
 
-    with rasterio.open(
-        village.boundaries_path
-    ) as src:
+    debug_rows = [] 
 
+    with rasterio.open(village.boundaries_path) as src:
         for idx, (plot_id, row) in enumerate(
             plots.iterrows()
         ):
@@ -92,13 +99,9 @@ if __name__ == "__main__":
                     plot_id
                 )
 
-                # ====================================================
                 # Conservative Flagging
-                # ====================================================
-
                 if area_class in [
                     "area_error",
-                    "uncertain",
                     "unknown"
                 ]:
 
@@ -123,10 +126,7 @@ if __name__ == "__main__":
 
                     continue
 
-                # ====================================================
                 # Alignment
-                # ====================================================
-
                 (
                     boundary_img,
                     transform,
@@ -146,19 +146,34 @@ if __name__ == "__main__":
                     shift_distance=result[
                         "shift_distance"
                     ],
-                    area_ratio=float(
-                        area_ratio
-                    ),
+                    area_ratio=None if pd.isna(area_ratio) else float(area_ratio),
                     confidence_gap=result[
                         "confidence_gap"
                     ]
                 )
-
+                
                 status = (
                     "corrected"
-                    if confidence >= 0.60
+                    if confidence >= 0.70
                     else "flagged"
                 )
+
+                debug_rows.append({
+                                
+                    "plot_number": str(plot_id),
+                    "area_ratio": (
+                        None
+                        if pd.isna(area_ratio)
+                        else float(area_ratio)),
+                    "area_class": area_class,
+                    "shift_distance": result["shift_distance"],
+                    "best_score": result["best_score"],
+                    "second_best": result["second_best"],
+                    "confidence_gap": result["confidence_gap"],
+                    "confidence": confidence,
+                    "status": status
+                
+                })
 
                 if status == "corrected":
                 
@@ -196,8 +211,10 @@ if __name__ == "__main__":
                     "method_note":
                     (
                         f"{area_class}; "
-                        f"shift="
-                        f"{result['shift_distance']:.1f}m"
+                        f"shift={result['shift_distance']:.1f}m "
+                        f"score={result['best_score']:.2f} "
+                        f"gap={result['confidence_gap']:.3f}"
+
                     ),
 
                     "geometry":
@@ -221,11 +238,16 @@ if __name__ == "__main__":
                 print(
                     f"FAILED {plot_id}: {e}"
                 )
+                predictions.append({
 
-    # ============================================================
+                    "plot_number": str(plot_id),
+                    "status": "flagged",
+                    "confidence": None,
+                    "method_note": f"error: {e}",
+                    "geometry": locals().get("original_geom",None)
+                })
+
     # Fix Invalid Geometries
-    # ============================================================
-
     for row in predictions:
 
         try:
@@ -241,10 +263,7 @@ if __name__ == "__main__":
 
             pass
 
-    # ============================================================
     # Sort Output
-    # ============================================================
-
     predictions = sorted(
 
         predictions,
@@ -254,10 +273,7 @@ if __name__ == "__main__":
 
     )
 
-    # ============================================================
     # Summary
-    # ============================================================
-
     corrected = sum(
 
         p["status"] == "corrected"
@@ -321,10 +337,7 @@ if __name__ == "__main__":
             f"{max(confs):.3f}"
         )
 
-    # ============================================================
     # GeoDataFrame
-    # ============================================================
-
     gdf = gpd.GeoDataFrame(
 
         predictions,
@@ -335,10 +348,28 @@ if __name__ == "__main__":
 
     )
 
-    # ============================================================
-    # Save GeoJSON
-    # ============================================================
+    debug_dir = Path(
+    "outputs/debug")
 
+    debug_dir.mkdir(
+        parents=True,
+        exist_ok=True)
+    
+    pd.DataFrame(
+        debug_rows
+    ).to_csv(
+    
+        debug_dir /
+        f"{VILLAGE_NAME}_all_scores.csv",
+    
+        index=False)
+    
+    print(
+        f"Saved debug: "
+        f"{debug_dir}/{VILLAGE_NAME}_all_scores.csv")
+    
+
+    # Save GeoJSON
     output_dir = Path(
         "outputs/predictions"
     )

@@ -11,15 +11,8 @@ __pycache__/
 .vscode/
 .idea/
 
-# Outputs
+# Generated outputs
 outputs/
-*.png
-
-# Large Data
-data/
-*.tif
-*.tiff
-*.geojson
 
 # OS
 .DS_Store

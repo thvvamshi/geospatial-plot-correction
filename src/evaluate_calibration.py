@@ -11,7 +11,26 @@ import geopandas as gpd
 from bhume import load
 
 
-VILLAGE_DIR = "data/vadnerbhairav"
+# ============================================================
+# Village Inference
+# ============================================================
+
+def infer_village(prediction_file):
+
+    prediction_name = (
+        prediction_file.stem.lower()
+    )
+
+    if "malatavadi" in prediction_name:
+        return "data/malatavadi"
+
+    if "vadnerbhairav" in prediction_name:
+        return "data/vadnerbhairav"
+
+    raise ValueError(
+        f"Cannot infer village from "
+        f"{prediction_name}"
+    )
 
 
 # ============================================================
@@ -63,7 +82,7 @@ def get_prediction_file():
         )
 
         print(
-            "python src\\predictor.py"
+            "python src/generate_predictions.py"
         )
 
         sys.exit(0)
@@ -143,7 +162,9 @@ if __name__ == "__main__":
     )
 
     village = load(
-        VILLAGE_DIR
+        infer_village(
+            prediction_file
+        )
     )
 
     truths = (
@@ -262,7 +283,7 @@ if __name__ == "__main__":
         )
     )
     print()
-    
+
     print()
     print("=" * 60)
 

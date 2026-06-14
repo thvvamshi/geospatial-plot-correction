@@ -1,4 +1,5 @@
 from pathlib import Path
+from statistics import mean
 import sys
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -16,13 +17,7 @@ from shapely.geometry import LineString
 from bhume import load
 from bhume.geo import geom_to_imagery_crs
 
-VILLAGE_DIR = "data/vadnerbhairav"
-
-
-# ============================================================
 # Read Boundary Patch
-# ============================================================
-
 def get_boundary_patch(src, geom, pad=50):
 
     geom_img = geom_to_imagery_crs(src, geom)
@@ -53,10 +48,7 @@ def get_boundary_patch(src, geom, pad=50):
     )
 
 
-# ============================================================
 # Boundary Sampling
-# ============================================================
-
 def sample_polygon_boundary(
     poly,
     n_points=200
@@ -85,10 +77,7 @@ def sample_polygon_boundary(
     ]
 
 
-# ============================================================
 # Convert Sampled Points -> Pixels
-# ============================================================
-
 def sampled_points_to_pixels(
     geom,
     transform,
@@ -122,10 +111,7 @@ def sampled_points_to_pixels(
     )
 
 
-# ============================================================
 # Distance Transform
-# ============================================================
-
 def build_distance_map(
     boundary_img
 ):
@@ -143,10 +129,7 @@ def build_distance_map(
     )
 
 
-# ============================================================
 # Fast Shift Scoring
-# ============================================================
-
 def score_shift_pixels(
     distance_map,
     base_pixels,
@@ -182,17 +165,20 @@ def score_shift_pixels(
         cols[mask]
     ]
 
+    mean_distance = float(
+        np.mean(distances))
+    
+    shift_distance = np.sqrt(
+        dx * dx + dy * dy
+    )   
+    shift_penalty = (shift_distance * 0.08)
+     
     return -float(
-        np.mean(
-            distances
-        )
+        np.mean(distances) + shift_penalty
     )
 
 
-# ============================================================
 # Coarse-to-Fine Search
-# ============================================================
-
 def find_best_shift(
     boundary_img,
     geom_img,
@@ -216,9 +202,9 @@ def find_best_shift(
     # Stage 1
     # ========================================================
 
-    for dx in range(-40, 41, 8):
+    for dx in range(-40, 41, 4):
 
-        for dy in range(-40, 41, 8):
+        for dy in range(-40, 41, 4):
 
             score = score_shift_pixels(
                 distance_map,
@@ -244,21 +230,21 @@ def find_best_shift(
     second_best = -999999
 
     for dx in range(
-        best_dx - 8,
-        best_dx + 9,
-        2
+        best_dx - 4,
+        best_dx + 5,
+        1
     ):
 
         for dy in range(
-            best_dy - 8,
-            best_dy + 9,
-            2
+            best_dy - 4,
+            best_dy + 5,
+            1
         ):
 
             score = score_shift_pixels(
                 distance_map,
                 base_pixels,
-                dx,
+                dx, 
                 dy
             )
 
@@ -282,10 +268,7 @@ def find_best_shift(
     )
 
 
-# ============================================================
 # Public API
-# ============================================================
-
 def align_plot(
     boundary_img,
     geom_img,
@@ -303,16 +286,28 @@ def align_plot(
         transform
     )
 
+    pixel_width = transform.a
+    pixel_height = abs(transform.e)
+
     shifted_geom = translate(
         geom_img,
-        xoff=dx,
-        yoff=dy
+        xoff=dx * pixel_width,
+        yoff=-dy * pixel_height
     )
 
     shift_distance = np.sqrt(
-        dx * dx +
-        dy * dy
+        (dx * pixel_width) ** 2 +
+        (dy * pixel_height) ** 2
     )
+    
+    if shift_distance > 40:
+
+        dx = 0
+        dy = 0
+
+        shift_distance = 0.0
+
+        shifted_geom = geom_img
 
     return {
 
@@ -337,16 +332,13 @@ def align_plot(
         "shifted_geom":
         shifted_geom
     }
-
-
-# ============================================================
 # Debug
-# ============================================================
-
 if __name__ == "__main__":
 
+    village_name = sys.argv[1] if len(sys.argv) > 1 else "vadnerbhairav"
+
     village = load(
-        VILLAGE_DIR
+        f"data/{village_name}"
     )
 
     test_plots = [
@@ -389,3 +381,4 @@ if __name__ == "__main__":
                 f"shift={result['shift_distance']:.1f}m | "
                 f"score={result['best_score']:.3f}"
             )
+
