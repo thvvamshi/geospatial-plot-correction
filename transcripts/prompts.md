@@ -1,3 +1,7 @@
+
+ChatGPT web chat link :  https://chatgpt.com/share/6a2ee95a-d360-83ee-9f2a-a16030049c62
+
+
 Prompt 1
 
 I received a geospatial take-home assignment from BhuMe. Before jumping into coding, can you explain what problem they are actually trying to solve and what skills they are likely evaluating beyond the final score?
