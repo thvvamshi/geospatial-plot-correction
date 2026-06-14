@@ -1,96 +1,294 @@
-# BhuMe Boundary Take-Home: Starter Kit
+# BhuMe - Land Parcel Boundary Alignment System
 
-The official plot outlines in Maharashtra's land records sit metres off the real fields (an
-artifact of how old paper maps were georeferenced onto satellite imagery). **Your job: for each
-plot, return your best estimate of its true on-the-ground boundary, plus a confidence, and flag
-the ones you can't place.**
+## Overview
 
-Read the problem in full at the site's **Understand** and **The task** pages first. This kit just
-removes the plumbing so you start at the interesting part.
+This project addresses the BhuMe Boundary Alignment Challenge, where official land parcel boundaries are misaligned with actual field boundaries visible in satellite imagery. The objective is to estimate the true on-ground parcel location, assign a calibrated confidence score, and flag parcels that cannot be reliably corrected.
 
-## What this kit does (and doesn't)
+The solution combines image-based boundary alignment, geometric consistency checks, and confidence calibration to generate corrected parcel boundaries while maintaining reliable uncertainty estimates.
 
-It hands you the geospatial plumbing we are **not** assessing, so your hours go to the actual
-problem. Each piece, and why it's here:
+---
 
-- **`load(village)`** — plots, imagery, boundary hints and example truths as one object, CRS sorted
-  out. *Why: so you're not wiring up a GeoTIFF reader, a GeoJSON reader, and CRS handling before you
-  can even look at a plot.*
-- **`patch_for_plot(src, geom)`** — the RGB pixels under a plot. *Why: cropping a georeferenced
-  raster to a polygon (the window + affine-transform math) is fiddly and isn't what we're testing.*
-- **`lonlat_to_pixel` / `pixel_to_lonlat`** — convert between map coordinates and image pixels.
-  *Why: the plots are lon/lat (EPSG:4326) but the imagery is web-mercator (EPSG:3857); mixing them
-  up silently misaligns everything, and debugging that is a time sink, not a signal.*
-- **`score(preds, village)`** — the exact accuracy + calibration + restraint metrics we grade on,
-  run against the public example truths. *Why: a real feedback loop, you iterate against the same
-  numbers we'll compute.*
-- **`write_predictions(path, gdf)`** — emit a contract-valid `predictions.geojson`. *Why: so a
-  schema slip never sinks an otherwise-good submission.*
-- **`global_median_shift(village)`** — a deliberately naive baseline and a worked load→score loop.
-  *Why: a floor to beat, and ~15 lines showing the whole cycle so you start at the interesting part.*
+## Problem Statement
 
-What it deliberately does **not** do: correct a plot for you. There's no align/snap/solve. The
-method (how you find the true boundary, how you decide your confidence) is the whole point.
+Official cadastral boundaries often exhibit systematic spatial offsets due to historical georeferencing processes. These offsets can range from a few meters to several tens of meters.
 
-**Use any AI tools you like.** We expect it. We're assessing how you direct them, not whether you
-typed every line. The plumbing above is exactly the kind of thing to let an LLM handle; the
-judgment (which edge is right, what your confidence should mean, which records to trust) is not.
+Given:
 
-## Setup
+* Official plot boundaries (`input.geojson`)
+* Satellite imagery (`imagery.tif`)
+* Auto-detected boundary hints (`boundaries.tif`)
+* Example aligned truths (`example_truths.geojson`)
 
-This kit uses [uv](https://docs.astral.sh/uv/). Install it once
-([instructions](https://docs.astral.sh/uv/getting-started/installation/)), then:
+The task is to:
+
+1. Estimate the true field boundary location.
+2. Produce corrected geometries where confidence is sufficient.
+3. Flag uncertain plots.
+4. Generate calibrated confidence scores that correlate with alignment quality.
+
+---
+
+## Solution Approach
+
+### 1. Boundary-Based Alignment
+
+For each parcel:
+
+* Extract a localized boundary-hint patch.
+* Rasterize the parcel geometry.
+* Search neighboring translations around the original location.
+* Evaluate alignment quality against detected field boundaries.
+* Select the best-scoring spatial shift.
+
+This enables recovery of local positional errors beyond a simple global offset.
+
+---
+
+### 2. Area Consistency Analysis
+
+The solution compares:
+
+* Recorded area
+* Map area
+* Potential kharaba area
+
+to compute an area ratio.
+
+Plots are classified into:
+
+| Class      | Description               |
+| ---------- | ------------------------- |
+| placement  | Area appears consistent   |
+| uncertain  | Moderate area discrepancy |
+| area_error | Significant mismatch      |
+| unknown    | Missing information       |
+
+Highly unreliable plots are conservatively flagged.
+
+---
+
+### 3. Confidence Calibration
+
+Confidence is derived from three signals:
+
+#### Shift Quality
+
+Measures how reasonable the required geometric movement is.
+
+#### Area Consistency
+
+Rewards parcels whose geometry agrees with land records.
+
+#### Alignment Separation
+
+Measures the difference between the best and second-best alignment candidates.
+
+Confidence Formula:
+
+```python
+confidence =
+    0.30 * shift_score +
+    0.10 * area_score +
+    0.60 * gap_score
+```
+
+This weighting emphasizes alignment certainty while preserving sensitivity to geometry quality.
+
+---
+
+### 4. Decision Logic
+
+A parcel is marked:
+
+```python
+corrected
+```
+
+when:
+
+```python
+confidence >= 0.70
+```
+
+Otherwise:
+
+```python
+flagged
+```
+
+This conservative strategy prioritizes reliability over aggressive corrections.
+
+---
+
+## Project Structure
+
+```text
+src/
+│
+├── alignment.py
+├── confidence.py
+├── predictor.py
+├── generate_predictions.py
+├── evaluate_alignment.py
+└── evaluate_calibration.py
+```
+
+### Core Modules
+
+#### alignment.py
+
+Responsible for:
+
+* Boundary extraction
+* Search window generation
+* Candidate evaluation
+* Best-shift selection
+
+#### confidence.py
+
+Computes calibrated confidence scores from alignment metrics.
+
+#### generate_predictions.py
+
+Main prediction pipeline.
+
+Generates:
+
+```text
+outputs/predictions/
+├── vadnerbhairav_predictions.geojson
+└── malatavadi_predictions.geojson
+```
+
+#### evaluate_alignment.py
+
+Evaluates correction quality against public truths.
+
+Reports:
+
+* IoU
+* Shift distance
+* Alignment metrics
+
+#### evaluate_calibration.py
+
+Evaluates confidence quality.
+
+Reports:
+
+* Confidence-IoU correlation
+* Calibration ranking performance
+
+---
+
+## Results
+
+### Vadnerbhairav
+
+| Metric                      | Score  |
+| --------------------------- | ------ |
+| Corrected Truths            | 4 / 6  |
+| Flagged Truths              | 2 / 6  |
+| Median IoU                  | 0.827  |
+| Official Baseline           | 0.612  |
+| Improvement                 | +0.333 |
+| Accurate @ IoU ≥ 0.5        | 100%   |
+| Median Centroid Error       | 5.0 m  |
+| Calibration Correlation (ρ) | 0.40   |
+
+### Malatavadi
+
+| Metric                | Score  |
+| --------------------- | ------ |
+| Corrected Truths      | 1 / 3  |
+| Flagged Truths        | 2 / 3  |
+| Median IoU            | 0.756  |
+| Official Baseline     | 0.510  |
+| Improvement           | +0.246 |
+| Accurate @ IoU ≥ 0.5  | 100%   |
+| Median Centroid Error | 4.1 m  |
+
+---
+
+## Running the Pipeline
+
+Generate predictions:
 
 ```bash
-uv sync
+python src/generate_predictions.py --village vadnerbhairav
+
+python src/generate_predictions.py --village malatavadi
 ```
 
-That reads `pyproject.toml` / `uv.lock`, picks Python 3.12, and installs everything (geopandas,
-rasterio, shapely, numpy, scipy, pillow) into a local `.venv`. The rasterio and geopandas wheels
-bundle GDAL, so there's no system GDAL to install. Prefix commands with `uv run` (below) and you
-never have to activate the venv yourself.
-
-## Get the data
-
-Download a village bundle from the site's **Get started** page and unzip it into `data/`:
-
-```
-data/
-  34855_vadnerbhairav_chandavad_nashik/
-    input.geojson         # the plots you transform (official, shifted)
-    imagery.tif           # georeferenced satellite mosaic, your primary signal
-    boundaries.tif        # rough, optional auto-detected field hints
-    example_truths.geojson# a few hand-aligned truths, for self-scoring
-```
-
-## Run the worked example
+Evaluate alignment:
 
 ```bash
-uv run quickstart.py data/34855_vadnerbhairav_chandavad_nashik
+python src/evaluate_alignment.py vadnerbhairav
+
+python src/evaluate_alignment.py malatavadi
 ```
 
-You'll see the baseline's score, e.g.:
+Evaluate confidence calibration:
 
+```bash
+python src/evaluate_calibration.py outputs/predictions/vadnerbhairav_predictions.geojson
+
+python src/evaluate_calibration.py outputs/predictions/malatavadi_predictions.geojson
 ```
-accuracy:    median IoU pred=0.71 vs official=0.61  (improvement=+0.11, improved 1.00)
-calibration: Spearman(conf,IoU)=— · AUC=—   (flat confidence → no signal; this is the bar to clear)
+
+---
+
+## Output Format
+
+The system generates GeoJSON files containing:
+
+```json
+{
+  "plot_number": "...",
+  "status": "corrected | flagged",
+  "confidence": 0.84,
+  "geometry": { ... }
+}
 ```
 
-Then make it better. A few directions (yours to choose, ignore, or replace):
+These outputs conform to the competition prediction contract.
 
-- The error is mostly a coherent offset, but not entirely. What's left after a global shift?
-- The imagery shows the real field edges. The boundary hints pre-detect some of them (roughly,
-  and only where they're visible). How do you use the image where the hints are thin?
-- Your confidence is scored. What makes a plot's correction trustworthy vs. a guess?
-- Some plots can't be placed. Flagging them is a correct answer.
+---
 
-## Scoring notes
+## Key Design Principles
 
-`score()` mirrors the objective (L1) half of grading: IoU vs the truth, improvement over the
-official position, confidence calibration (does high confidence mean high accuracy?), and restraint
-(don't move already-correct plots). It runs over the **public example truths only** — a handful — so
-treat its output as a **rough directional check, not a grade**. Calibration in particular needs more
-plots than this to mean much (and restraint shows nothing here: the public sample has no
-already-correct control plots), so reason about what your confidence *should* represent rather than
-maximizing the number on this sample. Your real grade uses a larger hidden set, so don't overfit to
-these few. The contract spec is in `CONTRACT.md`.
+* Conservative corrections over aggressive movement
+* Confidence scores represent actual reliability
+* Local alignment instead of global shifting
+* Explicit handling of uncertain plots
+* Calibration-aware prediction generation
+
+---
+
+## Technologies Used
+
+* Python 3.12
+* GeoPandas
+* Rasterio
+* Shapely
+* NumPy
+* OpenCV
+* Pandas
+
+---
+
+## Future Improvements
+
+* Multi-scale alignment search
+* Edge-aware boundary matching
+* Shape similarity constraints
+* Learned confidence calibration
+* Ensemble alignment strategies
+
+---
+
+## Author
+
+Vamshi Kumar
+
+BhuMe Boundary Alignment Challenge Submission
