@@ -1,106 +1,148 @@
-# BhuMe - Land Parcel Boundary Alignment System
+# BhuMe – Land Parcel Boundary Alignment System
 
 ## Overview
 
-This project addresses the BhuMe Boundary Alignment Challenge, where official land parcel boundaries are misaligned with actual field boundaries visible in satellite imagery. The objective is to estimate the true on-ground parcel location, assign a calibrated confidence score, and flag parcels that cannot be reliably corrected.
+This repository contains my solution for the BhuMe Boundary Alignment Challenge.
 
-The solution combines image-based boundary alignment, geometric consistency checks, and confidence calibration to generate corrected parcel boundaries while maintaining reliable uncertainty estimates.
+The objective is to improve the spatial accuracy of official land parcel boundaries by aligning them with visible field boundaries in satellite imagery while providing calibrated confidence estimates and flagging uncertain cases.
+
+The solution combines:
+
+* Local boundary-based alignment
+* Geometric consistency validation
+* Confidence calibration
+* Conservative correction policies
+
+Rather than forcing corrections on every plot, the system attempts to identify when a correction is reliable and when a parcel should remain flagged for manual review.
 
 ---
 
-## Problem Statement
+## Problem
 
-Official cadastral boundaries often exhibit systematic spatial offsets due to historical georeferencing processes. These offsets can range from a few meters to several tens of meters.
+Official cadastral boundaries are often spatially misaligned due to historical georeferencing processes and map digitization workflows.
 
 Given:
 
-* Official plot boundaries (`input.geojson`)
-* Satellite imagery (`imagery.tif`)
-* Auto-detected boundary hints (`boundaries.tif`)
-* Example aligned truths (`example_truths.geojson`)
+* `input.geojson` – official parcel boundaries
+* `imagery.tif` – satellite imagery
+* `boundaries.tif` – detected field boundary hints
+* `example_truths.geojson` – public aligned examples
 
 The task is to:
 
-1. Estimate the true field boundary location.
-2. Produce corrected geometries where confidence is sufficient.
-3. Flag uncertain plots.
-4. Generate calibrated confidence scores that correlate with alignment quality.
+1. Estimate the true parcel position.
+2. Produce corrected boundaries.
+3. Assign meaningful confidence scores.
+4. Flag uncertain plots.
+5. Generate contract-compliant predictions.
 
 ---
 
-## Solution Approach
+## Solution Architecture
 
-### 1. Boundary-Based Alignment
+```text
+Official Parcel
+       │
+       ▼
+Boundary Patch Extraction
+       │
+       ▼
+Local Alignment Search
+       │
+       ▼
+Best Candidate Selection
+       │
+       ▼
+Confidence Estimation
+       │
+       ▼
+Corrected / Flagged Decision
+       │
+       ▼
+Predictions GeoJSON
+```
 
-For each parcel:
+The system is intentionally modular so alignment quality, confidence estimation, and evaluation can be analyzed independently.
 
-* Extract a localized boundary-hint patch.
+---
+
+## Approach
+
+### 1. Local Boundary Alignment
+
+For every parcel:
+
+* Extract a local boundary-hint raster patch.
 * Rasterize the parcel geometry.
 * Search neighboring translations around the original location.
-* Evaluate alignment quality against detected field boundaries.
-* Select the best-scoring spatial shift.
+* Evaluate candidate alignments against detected field boundaries.
+* Select the highest-scoring candidate.
 
-This enables recovery of local positional errors beyond a simple global offset.
+This allows the system to recover local positional errors rather than relying on a single global offset.
 
 ---
 
-### 2. Area Consistency Analysis
+### 2. Area Consistency Validation
 
-The solution compares:
+Parcel metadata is used to evaluate geometric plausibility.
+
+Computed metrics include:
 
 * Recorded area
 * Map area
 * Potential kharaba area
+* Area ratio
 
-to compute an area ratio.
+Plots are categorized as:
 
-Plots are classified into:
+| Class      | Meaning                 |
+| ---------- | ----------------------- |
+| placement  | Area appears consistent |
+| uncertain  | Moderate mismatch       |
+| area_error | Significant discrepancy |
+| unknown    | Missing information     |
 
-| Class      | Description               |
-| ---------- | ------------------------- |
-| placement  | Area appears consistent   |
-| uncertain  | Moderate area discrepancy |
-| area_error | Significant mismatch      |
-| unknown    | Missing information       |
-
-Highly unreliable plots are conservatively flagged.
+Severe inconsistencies are conservatively flagged.
 
 ---
 
 ### 3. Confidence Calibration
 
-Confidence is derived from three signals:
+Confidence is designed to reflect actual reliability rather than simply alignment quality.
+
+Three signals are used:
 
 #### Shift Quality
 
-Measures how reasonable the required geometric movement is.
+Measures how reasonable the required correction distance is.
 
 #### Area Consistency
 
-Rewards parcels whose geometry agrees with land records.
+Rewards geometrically plausible parcels.
 
 #### Alignment Separation
 
-Measures the difference between the best and second-best alignment candidates.
+Measures how strongly the best alignment candidate outperforms competing candidates.
 
 Confidence Formula:
 
 ```python
-confidence =
+confidence = (
     0.30 * shift_score +
     0.10 * area_score +
     0.60 * gap_score
+)
 ```
 
-This weighting emphasizes alignment certainty while preserving sensitivity to geometry quality.
+The strongest weight is assigned to candidate separation because it proved most useful for calibration.
 
 ---
 
-### 4. Decision Logic
+### 4. Decision Strategy
 
-A parcel is marked:
+Plots are marked as:
 
-```python
+```text
 corrected
 ```
 
@@ -110,49 +152,63 @@ when:
 confidence >= 0.70
 ```
 
-Otherwise:
+Otherwise they are:
 
-```python
+```text
 flagged
 ```
 
-This conservative strategy prioritizes reliability over aggressive corrections.
+This prioritizes reliability over aggressive correction.
 
 ---
 
-## Project Structure
+## Repository Structure
 
 ```text
-src/
+.
+├── src/
+│   ├── alignment.py
+│   ├── confidence.py
+│   ├── predictor.py
+│   ├── generate_predictions.py
+│   ├── evaluate_alignment.py
+│   └── evaluate_calibration.py
 │
-├── alignment.py
-├── confidence.py
-├── predictor.py
-├── generate_predictions.py
-├── evaluate_alignment.py
-└── evaluate_calibration.py
+├── outputs/
+│   ├── predictions/
+│   └── debug/
+│
+├── transcripts/
+│   ├── README.md
+│   └── ...
+│
+├── CONTRACT.md
+├── README.md
+└── requirements.txt
 ```
 
-### Core Modules
+---
 
-#### alignment.py
+## Core Components
+
+### alignment.py
 
 Responsible for:
 
 * Boundary extraction
-* Search window generation
-* Candidate evaluation
-* Best-shift selection
+* Candidate shift generation
+* Alignment scoring
+* Best candidate selection
 
-#### confidence.py
+### confidence.py
 
-Computes calibrated confidence scores from alignment metrics.
+Computes calibrated confidence estimates from alignment metrics.
 
-#### generate_predictions.py
+### generate_predictions.py
 
 Main prediction pipeline.
 
-Generates:
+Produces:
 
 ```text
 outputs/predictions/
@@ -160,24 +216,24 @@ outputs/predictions/
 └── malatavadi_predictions.geojson
 ```
 
-#### evaluate_alignment.py
+### evaluate_alignment.py
 
-Evaluates correction quality against public truths.
+Evaluates alignment quality against public truths.
 
-Reports:
+Metrics:
 
 * IoU
 * Shift distance
-* Alignment metrics
+* Alignment statistics
 
-#### evaluate_calibration.py
+### evaluate_calibration.py
 
 Evaluates confidence quality.
 
-Reports:
+Metrics:
 
 * Confidence-IoU correlation
-* Calibration ranking performance
+* Calibration ranking quality
 
 ---
 
@@ -210,7 +266,7 @@ Reports:
 
 ---
 
-## Running the Pipeline
+## Running the Solution
 
 Generate predictions:
 
@@ -238,57 +294,41 @@ python src/evaluate_calibration.py outputs/predictions/malatavadi_predictions.ge
 
 ---
 
-## Output Format
+## Submission Artifacts
 
-The system generates GeoJSON files containing:
+This repository contains:
 
-```json
-{
-  "plot_number": "...",
-  "status": "corrected | flagged",
-  "confidence": 0.84,
-  "geometry": { ... }
-}
-```
-
-These outputs conform to the competition prediction contract.
+* Source code
+* Prediction GeoJSON files
+* AI development transcripts
+* Evaluation utilities
+* Engineering walkthrough materials
 
 ---
 
-## Key Design Principles
+## Key Engineering Decisions
 
-* Conservative corrections over aggressive movement
-* Confidence scores represent actual reliability
-* Local alignment instead of global shifting
-* Explicit handling of uncertain plots
-* Calibration-aware prediction generation
-
----
-
-## Technologies Used
-
-* Python 3.12
-* GeoPandas
-* Rasterio
-* Shapely
-* NumPy
-* OpenCV
-* Pandas
+* Prioritized local alignment over global shifting
+* Treated confidence as a first-class objective
+* Used conservative correction thresholds
+* Explicitly modeled uncertainty through flagging
+* Focused on interpretability and debugging rather than model complexity
 
 ---
 
-## Future Improvements
+## Future Work
+
+Potential improvements include:
 
 * Multi-scale alignment search
-* Edge-aware boundary matching
+* Edge-aware matching directly from imagery
 * Shape similarity constraints
 * Learned confidence calibration
 * Ensemble alignment strategies
+* Larger-scale calibration validation
 
 ---
 
 ## Author
 
-Vamshi Kumar
-
-BhuMe Boundary Alignment Challenge Submission
+**Vamshi Kumar**
